@@ -22,11 +22,7 @@ extension Color {
 }
 
 struct ContentView: View {
-    @StateObject private var viewModel = RAMBarViewModel()
-
-    func setPopoverVisible(_ visible: Bool) {
-        viewModel.setPopoverVisible(visible)
-    }
+    @ObservedObject var viewModel: RAMBarViewModel
 
     var body: some View {
         VStack(spacing: 0) {
@@ -92,34 +88,9 @@ class RAMBarViewModel: ObservableObject {
     @Published var isLoading = true
     @Published var isRefreshing = false
 
-    private var timer: Timer?
-
     init() {
         // Load full data in background on first open
         refreshAsync()
-    }
-
-    deinit {
-        timer?.invalidate()
-    }
-
-    /// Start/stop the refresh timer based on popover visibility.
-    /// No point polling every 3s when the popover is closed — this is the
-    /// main fix for the "significant energy" warning.
-    func setPopoverVisible(_ visible: Bool) {
-        if visible {
-            // Refresh immediately when opened, then every 3s
-            refreshAsync()
-            guard timer == nil else { return }
-            let t = Timer(timeInterval: 3.0, repeats: true) { [weak self] _ in
-                self?.refreshAsync()
-            }
-            RunLoop.main.add(t, forMode: .common)
-            timer = t
-        } else {
-            timer?.invalidate()
-            timer = nil
-        }
     }
 
     func refreshAsync() {
@@ -1060,7 +1031,7 @@ struct FooterView: View {
         HStack {
             Text("LAST SYNC: \(lastUpdate, formatter: formatter)")
                 .font(.system(.caption2, design: .monospaced))
-                .foregroundColor(.retroTextMuted)
+                .foregroundColor(.retroTextDim)
                 .tracking(0.5)
 
             Spacer()
@@ -1071,7 +1042,7 @@ struct FooterView: View {
             .buttonStyle(.plain)
             .font(.system(.caption, design: .monospaced))
             .fontWeight(.bold)
-            .foregroundColor(.retroTextMuted)
+            .foregroundColor(.retroTextPrimary)
             .tracking(1)
         }
         .padding(.horizontal)
@@ -1107,5 +1078,5 @@ extension Color {
 }
 
 #Preview {
-    ContentView()
+    ContentView(viewModel: RAMBarViewModel())
 }

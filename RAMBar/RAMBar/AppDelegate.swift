@@ -6,32 +6,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: NSPopover!
     private var updateTimer: Timer?
     private var lastMemoryWarningTime: Date?
-    private var contentView: ContentView?
+    private var viewModel: RAMBarViewModel!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Create status bar item
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
         if let button = statusItem.button {
             button.action = #selector(togglePopover)
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-            // Show "Loading..." initially until memory data is available
-            button.title = "Loading..."
+            // Show elided "..." initially until memory data is available
+            button.title = "…"
         }
 
-        // Create popover
-        let view = ContentView()
-        contentView = view
+        // Create view model and popover
+        viewModel = RAMBarViewModel()
+        let view = ContentView(viewModel: viewModel)
         popover = NSPopover()
         popover.contentSize = NSSize(width: 380, height: 520)
         popover.behavior = .transient
         popover.animates = true
         popover.contentViewController = NSHostingController(rootView: view)
 
-        // Start update timer — 5s is responsive enough for a menu bar icon
-        updateTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        // TONY: 5s --> 2s
+        // Start update timer — 2s is responsive enough for a menu bar icon
+        // Also updates popover content when visible
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.updateStatusButton()
             self?.checkMemoryPressure()
+            
+            // Refresh popover content if it's visible
+            if self?.popover.isShown == true {
+                self?.viewModel.refreshAsync()
+            }
         }
         RunLoop.main.add(updateTimer!, forMode: .common)
 
@@ -40,7 +47,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.updateStatusButton()
         }
     }
-
+    
     func applicationWillTerminate(_ notification: Notification) {
         updateTimer?.invalidate()
     }
@@ -50,9 +57,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if popover.isShown {
             popover.performClose(nil)
-            contentView?.setPopoverVisible(false)
         } else {
-            contentView?.setPopoverVisible(true)
+            // Trigger an immediate refresh when opening
+            viewModel.refreshAsync()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
 
             // Ensure popover window is key
@@ -65,10 +72,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let memory = MemoryMonitor.shared.getSystemMemory()
         let percent = Int(memory.usagePercent)
-
-        // Create attributed string with icon and percentage
-        let attachment = NSTextAttachment()
-        let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
 
         let symbolName: String
         let color: NSColor
@@ -85,27 +88,68 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             color = NSColor.systemRed
         }
 
-        if let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
-            .withSymbolConfiguration(config) {
-            attachment.image = symbol.tinted(with: color)
+        let chipSize = NSSize(width: 22, height: 22)
+
+        let compositeImage = NSImage(size: chipSize, flipped: false) { rect in
+            // Draw the chip symbol scaled to fill the image
+            let config = NSImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+            if let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
+                .withSymbolConfiguration(config) {
+                let tinted = symbol.tinted(with: color)
+                // Center the stimeymbol within our canvas
+                let symSize = tinted.size
+                let symRect = NSRect(
+                    x: (rect.width - symSize.width) / 2,
+                    y: (rect.height - symSize.height) / 2,
+                    width: symSize.width,
+                    height: symSize.height
+                )
+                tinted.draw(in: symRect)
+            }
+
+            // Overlay the percentage text, centered within the chip
+            let text = "\(percent)%"
+            let fontSize: CGFloat = percent >= 100 ? 5.5 : 6.5
+            let font = NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .bold)
+
+            // Use white for filled (warning/critical) states, color for nominal
+            let textColor: NSColor = (symbolName == "memorychip.fill")
+                ? NSColor.white
+                : color
+
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: textColor
+            ]
+            let attrStr = NSAttributedString(string: text, attributes: attrs)
+            let textSize = attrStr.size()
+            let textRect = NSRect(
+                x: (rect.width - textSize.width) / 2,
+                y: (rect.height - textSize.height) / 2,
+                width: textSize.width,
+                height: textSize.height
+            )
+            attrStr.draw(in: textRect)
+
+            return true
         }
 
-        let attachmentString = NSAttributedString(attachment: attachment)
-        let percentString = NSAttributedString(
-            string: " \(percent)%",
-            attributes: [
-                .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
-                .foregroundColor: color
-            ]
+        compositeImage.isTemplate = false
+
+        let attachment = NSTextAttachment()
+        attachment.image = compositeImage
+        attachment.bounds = NSRect(
+            x: 0,
+            y: (NSFont.systemFont(ofSize: NSFont.systemFontSize).capHeight - chipSize.height) / 2,
+            width: chipSize.width,
+            height: chipSize.height
         )
 
         let combined = NSMutableAttributedString()
-        combined.append(attachmentString)
-        combined.append(percentString)
-
+        combined.append(NSAttributedString(attachment: attachment))
         button.attributedTitle = combined
     }
-
+    
     private func checkMemoryPressure() {
         let memory = MemoryMonitor.shared.getSystemMemory()
 
