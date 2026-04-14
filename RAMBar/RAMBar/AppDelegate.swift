@@ -10,7 +10,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Create status bar item
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem.button {
             button.action = #selector(togglePopover)
@@ -89,17 +89,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let chipSize = NSSize(width: 22, height: 22)
+        let gpuSize = NSSize(width: 22, height: 22)
+        let spacerWidth = 4.0
+        
+        let compositeImageSize = NSSize(
+            width: 160, //chipSize.width + spacerWidth + gpuSize.width,
+            height: chipSize.height
+        )
 
-        let compositeImage = NSImage(size: chipSize, flipped: false) { rect in
+        let compositeImage = NSImage(size: compositeImageSize, flipped: false) { rect in
             // Draw the chip symbol scaled to fill the image
             let config = NSImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+            var symSize = NSSize()
             if let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
                 .withSymbolConfiguration(config) {
                 let tinted = symbol.tinted(with: color)
                 // Center the stimeymbol within our canvas
-                let symSize = tinted.size
+                symSize = tinted.size
                 let symRect = NSRect(
-                    x: (rect.width - symSize.width) / 2,
+                    x: 0,
                     y: (rect.height - symSize.height) / 2,
                     width: symSize.width,
                     height: symSize.height
@@ -124,31 +132,48 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let attrStr = NSAttributedString(string: text, attributes: attrs)
             let textSize = attrStr.size()
             let textRect = NSRect(
-                x: (rect.width - textSize.width) / 2,
+                x: (symSize.width - textSize.width) / 2,
                 y: (rect.height - textSize.height) / 2,
                 width: textSize.width,
                 height: textSize.height
             )
             attrStr.draw(in: textRect)
+            
+            // Draw the GPU usage
+            let gpuRect = NSRect(
+                x: symSize.width + spacerWidth,
+                y: 0,
+                width: gpuSize.width,
+                height: 10
+            )
+            
+            NSColor.systemBlue.set()
+            
+            // 3. Create the path for the rectangle
+            let path = NSBezierPath(rect: gpuRect)
+            
+            // 4. Draw it
+            path.fill()   // Use .fill() for a solid block, or .stroke() for an outline
 
             return true
         }
 
         compositeImage.isTemplate = false
-
+        
         let attachment = NSTextAttachment()
         attachment.image = compositeImage
         attachment.bounds = NSRect(
             x: 0,
             y: (NSFont.systemFont(ofSize: NSFont.systemFontSize).capHeight - chipSize.height) / 2,
-            width: chipSize.width,
-            height: chipSize.height
+            width: compositeImageSize.width,
+            height: compositeImageSize.height
         )
 
         let combined = NSMutableAttributedString()
         combined.append(NSAttributedString(attachment: attachment))
         button.attributedTitle = combined
     }
+
     
     private func checkMemoryPressure() {
         let memory = MemoryMonitor.shared.getSystemMemory()
