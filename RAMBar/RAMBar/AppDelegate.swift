@@ -7,6 +7,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var updateTimer: Timer?
     private var lastMemoryWarningTime: Date?
     private var viewModel: RAMBarViewModel!
+    private var gpuUsageProvider = GPUUsageProvider()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Create status bar item
@@ -72,6 +73,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let memory = MemoryMonitor.shared.getSystemMemory()
         let percent = Int(memory.usagePercent)
+        
+        let gpuPercent = gpuUsageProvider.getGPUUtilization()
+        //print("GPU: \(gpuPercent)")
 
         let symbolName: String
         let color: NSColor
@@ -88,12 +92,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             color = NSColor.systemRed
         }
 
+        gpuUsageProvider.setHistorySize(historySize: 22)
         let chipSize = NSSize(width: 22, height: 22)
         let gpuSize = NSSize(width: 22, height: 22)
         let spacerWidth = 4.0
-        
+        let mysteryPadding = 8.0
+        // print(chipSize.width + spacerWidth + gpuSize.width)
         let compositeImageSize = NSSize(
-            width: 160, //chipSize.width + spacerWidth + gpuSize.width,
+            width:  chipSize.width + spacerWidth + gpuSize.width + mysteryPadding,
             height: chipSize.height
         )
 
@@ -139,21 +145,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             )
             attrStr.draw(in: textRect)
             
-            // Draw the GPU usage
-            let gpuRect = NSRect(
+            NSColor.lightGray.set()
+            
+            let gpuBackground = NSRect(
                 x: symSize.width + spacerWidth,
                 y: 0,
                 width: gpuSize.width,
-                height: 10
+                height: gpuSize.height
             )
             
-            NSColor.systemBlue.set()
-            
-            // 3. Create the path for the rectangle
-            let path = NSBezierPath(rect: gpuRect)
-            
-            // 4. Draw it
-            path.fill()   // Use .fill() for a solid block, or .stroke() for an outline
+            let gpuBackgroundPath = NSBezierPath(rect: gpuBackground)
+
+            let transparentBlueBackground = NSColor(red: 0.0, green: 0.0, blue: 1.0, alpha: 0.4)
+            transparentBlueBackground.set()
+            gpuBackgroundPath.fill()   // Use .fill() for a solid block, or .stroke() for an outline
+
+            // TONY: Rewrite to make more the +1 -2 offsets for the border
+            NSColor.systemBlue.setStroke()
+            let xOffset = Int(symSize.width + spacerWidth)
+            let histogramCount = max(0, gpuPercent.count - 1)
+            for  index in 0...histogramCount {
+                let percent: Int = Int(gpuPercent[index] * gpuSize.height)
+                NSBezierPath.strokeLine(from: NSPoint(x: xOffset + index, y: 0), to: NSPoint(x: xOffset + index, y: percent))
+            }
+
+            let transparentBlueBorder = NSColor(red: 0.0, green: 0.0, blue: 1.0, alpha: 0.7)
+            transparentBlueBorder.set()
+            gpuBackgroundPath.stroke()
+
+            // TONY: For debugging of mysteryPadding.
+            // NSColor.yellow.setStroke()
+            // NSBezierPath.strokeLine(from: NSPoint(x: xOffset + 22, y: 0), to: NSPoint(x: xOffset + 22, y: percent))
 
             return true
         }

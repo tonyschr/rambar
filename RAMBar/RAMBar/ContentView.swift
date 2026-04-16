@@ -21,9 +21,18 @@ extension Color {
     static let retroGreen = Color(hex: "00ff88")!
 }
 
+
+struct GPUDataPoint: Identifiable {
+    let id = UUID()
+    let time: Date
+    let value: Double
+}
+
 struct ContentView: View {
     @ObservedObject var viewModel: RAMBarViewModel
-
+    @StateObject var provider = GPUUsageProvider()
+    @State var history: [GPUDataPoint] = []
+    
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -78,59 +87,6 @@ struct ContentView: View {
         }
         .frame(width: 380, height: 560)
         .background(Color.retroSurface)
-    }
-}
-
-// MARK: - View Model
-
-class RAMBarViewModel: ObservableObject {
-    @Published var state = RAMBarState()
-    @Published var isLoading = true
-    @Published var isRefreshing = false
-
-    init() {
-        // Load full data in background on first open
-        refreshAsync()
-    }
-
-    func refreshAsync() {
-        guard !isRefreshing else { return }
-        isRefreshing = true
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            // Get system memory (fast, no shell)
-            let memory = MemoryMonitor.shared.getSystemMemory()
-
-            // Get process data — single ps aux call, reused across all queries
-            let processes = ProcessMonitor.shared.getProcessList()
-            let apps = ProcessMonitor.shared.getAppMemory(from: processes)
-            let claude = ProcessMonitor.shared.getClaudeSessions(from: processes)
-            let python = ProcessMonitor.shared.getPythonProcesses(from: processes)
-            let vscode = ProcessMonitor.shared.getVSCodeWorkspaces(from: processes)
-            let chrome = ProcessMonitor.shared.getChromeTabs(from: processes)
-
-            var newState = RAMBarState()
-            newState.systemMemory = memory
-            newState.apps = apps
-            newState.claudeSessions = claude
-            newState.pythonProcesses = python
-            newState.vscodeWorkspaces = vscode
-            newState.chromeTabs = chrome
-            newState.lastUpdate = Date()
-            newState.diagnostics = ProcessMonitor.shared.generateDiagnostics(state: newState)
-
-            // Track memory history (last 30 readings)
-            var history = self?.state.memoryHistory ?? []
-            history.append(memory.usagePercent)
-            if history.count > 30 { history.removeFirst(history.count - 30) }
-            newState.memoryHistory = history
-
-            DispatchQueue.main.async {
-                self?.state = newState
-                self?.isLoading = false
-                self?.isRefreshing = false
-            }
-        }
     }
 }
 
