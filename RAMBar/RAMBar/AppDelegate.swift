@@ -79,16 +79,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let symbolName: String
         let color: NSColor
+        let textColor = NSColor.labelColor
 
         switch memory.status {
         case .nominal:
             symbolName = "memorychip"
-            color = NSColor.systemGreen
+            color = NSColor.labelColor
         case .warning:
-            symbolName = "memorychip.fill"
+            //symbolName = "memorychip.fill"
+            symbolName = "memorychip"
             color = NSColor.systemOrange
         case .critical:
-            symbolName = "memorychip.fill"
+            symbolName = "memorychip"
             color = NSColor.systemRed
         }
 
@@ -125,11 +127,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let text = "\(percent)%"
             let fontSize: CGFloat = percent >= 100 ? 5.5 : 6.5
             let font = NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .bold)
-
-            // Use white for filled (warning/critical) states, color for nominal
-            let textColor: NSColor = (symbolName == "memorychip.fill")
-                ? NSColor.white
-                : color
+//
+//            // Use white for filled (warning/critical) states, color for nominal
+//            let textColor: NSColor = (symbolName == "memorychip.fill")
+//                ? NSColor.white
+//                : color
 
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: font,
@@ -145,8 +147,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             )
             attrStr.draw(in: textRect)
             
-            NSColor.lightGray.set()
-            
+            let histogram = NSColor.labelColor.withAlphaComponent(0.5)
+            let histogramLine = NSColor.labelColor
+            let histogramOutline = NSColor.labelColor.withAlphaComponent(0.10)
+
             let gpuBackground = NSRect(
                 x: symSize.width + spacerWidth,
                 y: 0,
@@ -156,21 +160,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             
             let gpuBackgroundPath = NSBezierPath(rect: gpuBackground)
 
-            let transparentBlueBackground = NSColor(red: 0.0, green: 0.0, blue: 1.0, alpha: 0.4)
-            transparentBlueBackground.set()
-            gpuBackgroundPath.fill()   // Use .fill() for a solid block, or .stroke() for an outline
+//            let transparentBlueBackground = NSColor(red: 0.0, green: 0.0, blue: 1.0, alpha: 0.4)
+//            transparentBlueBackground.set()
+//            gpuBackgroundPath.fill()   // Use .fill() for a solid block, or .stroke() for an outline
 
             // TONY: Rewrite to make more the +1 -2 offsets for the border
-            NSColor.systemBlue.setStroke()
-            let xOffset = Int(symSize.width + spacerWidth)
+            histogram.setStroke()
             let histogramCount = max(0, gpuPercent.count - 1)
-            for  index in 0...histogramCount {
+            let xOffset = Int(symSize.width + spacerWidth + gpuSize.width) - histogramCount
+            for index in 0...histogramCount {
                 let percent: Int = Int(gpuPercent[index] * gpuSize.height)
                 NSBezierPath.strokeLine(from: NSPoint(x: xOffset + index, y: 0), to: NSPoint(x: xOffset + index, y: percent))
             }
 
-            let transparentBlueBorder = NSColor(red: 0.0, green: 0.0, blue: 1.0, alpha: 0.7)
-            transparentBlueBorder.set()
+            for index in 0...histogramCount {
+                let percent: Int = Int(gpuPercent[index] * gpuSize.height)
+                NSBezierPath.strokeLine(from: NSPoint(x: xOffset + index, y: percent - 1), to: NSPoint(x: xOffset + index, y: percent))
+            }
+
+            if histogramCount > 0 {
+                NSColor.labelColor.setStroke()
+                let xOffsetBoldLine = xOffset + histogramCount
+                let percent: Int = Int(gpuPercent[histogramCount - 1] * gpuSize.height)
+                NSBezierPath.strokeLine(from: NSPoint(x: xOffsetBoldLine, y: 0), to: NSPoint(x: xOffsetBoldLine, y: percent))
+            }
+
+//            let transparentBlueBorder = NSColor(red: 0.0, green: 0.0, blue: 1.0, alpha: 0.7)
+            histogramOutline.set()
             gpuBackgroundPath.stroke()
 
             // TONY: For debugging of mysteryPadding.
